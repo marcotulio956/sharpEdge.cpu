@@ -9,6 +9,37 @@ TO EDIT
 - reservation_station_ma     address path already 32-bit (register sourced) — verify wiring only
 - sharpEdge_dut.v       update all address bus widths at instantiation
 
+TO IMPLEMENT DOUBLE CDB WRITEBACK:
+
+common_data_bus.v
+  - Split into two independent sub-arbiters:
+      arbiter0: inputs from AU0-3, LU0-3  (8 requestors)
+      arbiter1: inputs from FALU0-3, MA   (5 requestors)
+  - Each sub-arbiter outputs one grant per cycle
+  - Two output buses: {CDB0_tag, CDB0_value}, {CDB1_tag, CDB1_value}
+  - Round-robin within each sub-arbiter independently
+
+reservation_station_*.v  (all four)
+  - Each slot: add second comparator pair for CDB1
+  - Qj capture: check CDB0 || CDB1 (priority: either, they can't conflict)
+  - Qk capture: check CDB0 || CDB1
+
+reorder_buffer.v
+  - Each entry: listen to both CDB0 and CDB1
+  - Value written when matching tag appears on either bus
+  - Commit logic unchanged — still reads from ROB head
+
+sharpEdge_v3.v
+  - CDB instantiation wires doubled
+  - CDB0 wired to AU/LU outputs
+  - CDB1 wired to FALU/MA outputs
+
+
+TO EDIT PARAMETRIZATION
+- Reduce FALU to 1 or 2 units — biggest area saving, near-zero throughput loss for your workload
+- Add a second MA unit — biggest real throughput gain given 2 threads competing for memory
+- Plan a dual CDB for v3.5 — unblocks the writeback bottleneck as FU count and issue rate grow
+
 NOT STARTED
 
 - Privilege levels: Machine / Supervisor / User modes

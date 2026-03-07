@@ -1,0 +1,25 @@
+# SymbiYosys config: branch_predictor
+# NOTE: DUT uses posedge+negedge sensitivity list.
+# Yosys handles this as a clocked block with two clock domains.
+# Run: sby -f formal/branch_predictor.sby
+
+[tasks]
+prove
+cover
+
+[options]
+prove: mode prove
+prove: depth 20
+cover: mode cover
+cover: depth 20
+
+[engines]
+smtbmc bitwuzla
+
+[script]
+read -sv -formal formal/branch_predictor_props.sv
+prep -top branch_predictor_props
+
+[files]
+modules/branch_predictor.sv
+formal/branch_predictor_props.sv

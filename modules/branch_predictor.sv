@@ -17,7 +17,9 @@ module branch_predictor(input clk, rst, branch, branch_taken, output prediction)
 
 	reg [1:0] state;
 
-	always @(clk) begin // checks every edge  
+	// BUG FIX: always @(clk) is level-sensitive and rejected by Verilator;
+	// changed to explicit posedge/negedge to preserve both-edge behavior
+	always @(posedge clk or negedge clk) begin
 		if (rst == 1'b1) begin
 			state <= WEAK_TAKE;			
 		end

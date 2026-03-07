@@ -8,8 +8,6 @@
 
 **sharpEdge** is a hardware superscalar processor implemented in Verilog, featuring speculative dynamic scheduling via a modified Tomasulo's algorithm, fine-grained multithreading (2 threads per core), and a custom 16-bit RISC ISA with floating-point support and 32-bit address space.
 
-This is the third iteration of the sharpEdge CPU series, evolving from a Logisim unicycle (v1) through a 5-stage pipeline (v2) to a fully out-of-order, speculative, multithreaded core.
-
 ---
 
 ## Architecture Highlights
@@ -175,7 +173,7 @@ Two instructions are issued sequentially per cycle — one to each thread — vi
 | Reservation stations | 4 (MA, FALU, AU, LU) |
 | Integer arithmetic units | 4 |
 | Integer logical units | 4 |
-| FP arithmetic-logical units | 4 |
+| FP arithmetic-logical units | 2 |
 | GPRs per thread | 16 × 32-bit |
 
 ### Memory
@@ -194,6 +192,8 @@ The ISA includes `llw` (Load Linked Word) and `swc` (Store Word Conditional) to 
 ---
 
 ## Version History
+
+This is the third iteration of the sharpEdge CPU series, evolving from a Logisim unicycle (v1) through a 5-stage pipeline (v2) to a fully out-of-order, speculative, multithreaded core.
 
 | Version | Description |
 |---|---|
