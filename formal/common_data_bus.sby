@@ -1,0 +1,25 @@
+# SymbiYosys config: common_data_bus (dual-CDB architecture)
+# All properties expected to PASS — BUG-1 and BUG-2 fixed in new DUT.
+# Run: sby -f formal/common_data_bus.sby
+
+[tasks]
+prove
+cover
+
+[options]
+prove: mode prove
+prove: depth 20
+cover: mode cover
+cover: depth 20
+
+[engines]
+smtbmc bitwuzla
+
+[script]
+read -sv -formal formal/common_data_bus_props.sv
+prep -top common_data_bus_props
+
+[files]
+modules/util.sv
+modules/common_data_bus.sv
+formal/common_data_bus_props.sv

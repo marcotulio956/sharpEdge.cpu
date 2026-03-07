@@ -77,6 +77,21 @@ module mux16xP #(
 		endcase
 	end
 endmodule
+module decoder8x8bits(input [2:0] sel, output reg [7:0] out);
+	always@(*)begin
+		case(sel)
+			3'b000: out = 8'b00000001;
+			3'b001: out = 8'b00000010;
+			3'b010: out = 8'b00000100;
+			3'b011: out = 8'b00001000;
+			3'b100: out = 8'b00010000;
+			3'b101: out = 8'b00100000;
+			3'b110: out = 8'b01000000;
+			3'b111: out = 8'b10000000;
+			default: out = 8'hxx;
+		endcase
+	end
+endmodule
 module decoder16x16bits(input [3:0] sel, output reg [15:0] out);
 	always@(*)begin
 		case(sel)
@@ -96,6 +111,7 @@ module decoder16x16bits(input [3:0] sel, output reg [15:0] out);
 			4'b1101: out = 16'b0010000000000000;
 			4'b1110: out = 16'b0100000000000000;
 			4'b1111: out = 16'b1000000000000000;
+			default : out = 16'hxxxx;
 		endcase
 	end	
 endmodule

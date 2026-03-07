@@ -1,0 +1,23 @@
+# SymbiYosys config: thread_scheduler
+# Run: sby -f formal/thread_scheduler.sby
+
+[tasks]
+prove
+cover
+
+[options]
+prove: mode prove
+prove: depth 15
+cover: mode cover
+cover: depth 15
+
+[engines]
+smtbmc bitwuzla
+
+[script]
+read -sv -formal formal/thread_scheduler_props.sv
+prep -top thread_scheduler_props
+
+[files]
+modules/thread_scheduler.sv
+formal/thread_scheduler_props.sv

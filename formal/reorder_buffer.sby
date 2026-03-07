@@ -1,0 +1,24 @@
+# SymbiYosys config: reorder_buffer
+# Depth 35 needed to fill 31-slot FIFO and observe full condition.
+# Run: sby -f formal/reorder_buffer.sby
+
+[tasks]
+prove
+cover
+
+[options]
+prove: mode prove
+prove: depth 35
+cover: mode cover
+cover: depth 35
+
+[engines]
+smtbmc bitwuzla
+
+[script]
+read -sv -formal formal/reorder_buffer_props.sv
+prep -top reorder_buffer_props
+
+[files]
+modules/reorder_buffer.sv
+formal/reorder_buffer_props.sv

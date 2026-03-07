@@ -75,7 +75,9 @@ module reorder_buffer#(
 	assign ready2_value = value[poshead];
 	assign full = (head-1'b1) == tail ? 1'b1:1'b0;
 
-	always@(clk)begin // allocates new entry every half cc, so does the RS
+	// BUG FIX: always @(clk) is level-sensitive and rejected by Verilator;
+	// changed to explicit posedge/negedge to preserve both-edge DDR allocation behavior
+	always @(posedge clk or negedge clk) begin // allocates new entry every half cc, so does the RS
 		if (rst == 1'b1)begin// a reset will flush only after ROB commit a mispredicted inst., whose flush decision happens at just one edge 
 			head <= 0; tail <= 0;//important
 			ready_to_commit <= 0;//important
