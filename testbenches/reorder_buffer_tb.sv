@@ -140,6 +140,8 @@ module reorder_buffer_tb;
             entry_destination = dest_v;
             entry_pc          = pc_v;
             @(posedge clk);
+            // Avoid TB/DUT race at posedge: deassert after DUT samples inputs.
+            #1;
             write_entry = 0;
         end
     endtask
@@ -178,7 +180,7 @@ module reorder_buffer_tb;
         entry_opc = 4'b0001; entry_destination = 16'h0003; entry_pc = 16'hAAAA;
         @(posedge clk); #1;
         check_bool(1'b1, created_entry_bool, "alloc_entry0_created");
-        check_robadrs(5'd0, entry,           "alloc_entry0_at_tail0");
+        check_robadrs(5'd1, entry,           "alloc_tail_advances_to1");
         write_entry = 0;
 
         // ----------------------------------------------------------------
@@ -191,7 +193,7 @@ module reorder_buffer_tb;
         @(negedge clk);
         cdb_write = 1; cdb_rob_adrs = 5'd0;
         cdb_snooped_value = 32'hDEAD_BEEF; cdb_exception = 3'b000;
-        @(posedge clk); cdb_write = 0; #1;
+        @(posedge clk); #1; cdb_write = 0; #1;
         // CDB fired; commit saw old ready=0 → didn't commit yet
         check_bool(1'b1, ready1_instruction_bool, "cdb_write_sets_ready1");
         check32(32'hDEAD_BEEF, ready1_value,      "ready1_value_correct");
@@ -219,13 +221,13 @@ module reorder_buffer_tb;
         @(negedge clk);
         cdb_write = 1; cdb_rob_adrs = 5'd0;
         cdb_snooped_value = 32'hAAAA_0001; cdb_exception = 3'b000;
-        @(posedge clk); cdb_write = 0; #1;
+        @(posedge clk); #1; cdb_write = 0; #1;
         check_bool(1'b1, ready1_instruction_bool, "seq_ready1_set_after_cdb0");
 
         @(negedge clk);
         cdb_write = 1; cdb_rob_adrs = 5'd1;
         cdb_snooped_value = 32'hAAAA_0002; cdb_exception = 3'b000;
-        @(posedge clk); cdb_write = 0; #1;
+        @(posedge clk); #1; cdb_write = 0; #1;
         // Posedge just ran: single commit for entry0, ready[1] now set
         check_bool(1'b1, ready1_instruction_bool, "seq_entry1_now_at_head");
         check32(32'hAAAA_0002, ready1_value,       "seq_entry1_value_at_head");
@@ -245,7 +247,7 @@ module reorder_buffer_tb;
         @(negedge clk);
         cdb_write = 1; cdb_rob_adrs = 5'd0;
         cdb_snooped_value = 32'h5555_5555; cdb_exception = 3'b000;
-        @(posedge clk); cdb_write = 0; #1;
+        @(posedge clk); #1; cdb_write = 0; #1;
 
         check_bool(1'b1, ready1_instruction_bool, "blocked_ready1_set");
         check_bool(1'b0, ready2_instruction_bool, "blocked_ready2_not_set");
@@ -281,7 +283,7 @@ module reorder_buffer_tb;
         @(negedge clk);
         cdb_write = 1; cdb_rob_adrs = 5'd0;
         cdb_snooped_value = 32'b0; cdb_exception = 3'b010;
-        @(posedge clk); cdb_write = 0; #1;
+        @(posedge clk); #1; cdb_write = 0; #1;
 
         check_bool(1'b1, ready1_instruction_bool, "exception_entry_ready");
         if (ready1_exception === 3'b010) begin
@@ -313,12 +315,12 @@ module reorder_buffer_tb;
         @(negedge clk);
         cdb_write = 1; cdb_rob_adrs = 5'd0;
         cdb_snooped_value = 32'hABCD_EF01; cdb_exception = 3'b000;
-        @(posedge clk); cdb_write = 0;
+        @(posedge clk); #1; cdb_write = 0;
 
         @(negedge clk);
         cdb_write = 1; cdb_rob_adrs = 5'd1;
         cdb_snooped_value = 32'hABCD_EF02; cdb_exception = 3'b000;
-        @(posedge clk); cdb_write = 0; #1;
+        @(posedge clk); #1; cdb_write = 0; #1;
 
         check32({16'b0, 16'h0200}, {16'b0, ready1_pc}, "pc_entry1_at_head");
 

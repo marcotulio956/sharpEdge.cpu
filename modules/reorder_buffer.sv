@@ -1,12 +1,3 @@
-/*
-wave create -driver freeze -pattern clock -initialvalue 0 -period 10ps -dutycycle 50 -starttime 0ps -endtime 10000ps sim:/reorder_buffer/clk
-wave create -driver freeze -pattern clock -initialvalue 1 -period 10ps -dutycycle 50 -starttime 0ps -endtime 10ps sim:/reorder_buffer/rst
-wave create -driver freeze -pattern clock -initialvalue 1 -period 100ps -dutycycle 85 -starttime 0ps -endtime 10000ps sim:/reorder_buffer/write_entry
-wave create -driver freeze -pattern random -initialvalue zzzz -period 10ps -random_type Uniform -seed 5 -range 3 0 -starttime 0ps -endtime 10000ps sim:/reorder_buffer/entry_opc
-wave create -driver freeze -pattern random -initialvalue zzzz -period 10ps -random_type Uniform -seed 6 -range 15 0 -starttime 0ps -endtime 10000ps sim:/reorder_buffer/entry_destination
-wave create -driver freeze -pattern random -initialvalue zzzz -period 10ps -random_type Uniform -seed 8 -range 15 0 -starttime 0ps -endtime 10000ps sim:/reorder_buffer/entry_pc
-*/
-
 module reorder_buffer#(
 		parameter ROB_ADRS_SIZE=5, ROB_LINES=(2**ROB_ADRS_SIZE)-1, V_SIZE=32, IM_ADRS_SIZE=16, OPC_SIZE=4
 	)(
@@ -75,9 +66,8 @@ module reorder_buffer#(
 	assign ready2_value = value[poshead];
 	assign full = (head-1'b1) == tail ? 1'b1:1'b0;
 
-	// BUG FIX: always @(clk) is level-sensitive and rejected by Verilator;
-	// changed to explicit posedge/negedge to preserve both-edge DDR allocation behavior
-	always @(posedge clk or negedge clk) begin // allocates new entry every half cc, so does the RS
+	// Use a single clock edge so shared ROB state is not driven from mixed clock domains.
+	always @(posedge clk) begin
 		if (rst == 1'b1)begin// a reset will flush only after ROB commit a mispredicted inst., whose flush decision happens at just one edge 
 			head <= 0; tail <= 0;//important
 			ready_to_commit <= 0;//important
