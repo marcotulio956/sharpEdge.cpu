@@ -59,6 +59,8 @@ module data_memory_tb;
             write_data0    = data;
             read_address0  = addr;
             @(posedge clk);
+            // Avoid TB/DUT race at posedge: drop write after DUT samples it.
+            #1;
             write0        = 0;
             write_data0   = 32'b0;  // defensive clear; read now gates on !write0
             #1;
@@ -125,6 +127,8 @@ module data_memory_tb;
         write_address0 = 32'd30; write_data0 = 32'hAAAA_AAAA;
         write_address1 = 32'd40; write_data1 = 32'hBBBB_BBBB;
         @(posedge clk);
+        // Avoid TB/DUT race at posedge.
+        #1;
         write0 = 0; write1 = 0;
         write_data0 = 32'b0; write_data1 = 32'b0;
         read_address0 = 32'd30; read_address1 = 32'd40;
@@ -139,6 +143,8 @@ module data_memory_tb;
         write_address0 = 32'd50; write_data0 = 32'h1111_1111;
         write_address1 = 32'd50; write_data1 = 32'h2222_2222;
         @(posedge clk);
+        // Avoid TB/DUT race at posedge.
+        #1;
         write0 = 0; write1 = 0;
         write_data0 = 32'b0; write_data1 = 32'b0;
         read_address0 = 32'd50;
@@ -160,6 +166,8 @@ module data_memory_tb;
         write1 = 1;
         write_address1 = 32'd70; write_data1 = 32'hDDDD_DDDD;
         @(posedge clk);
+        // Avoid TB/DUT race at posedge.
+        #1;
         write1 = 0; write_data1 = 32'b0;
         read_address0 = 32'd60;
         write_data0   = 32'b0;
