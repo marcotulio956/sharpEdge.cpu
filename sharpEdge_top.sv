@@ -1,4 +1,4 @@
-/*sharpEdge_v3 
+/*sharpEdge 
      ├── _CG_ // Clock Generator 
      ├── _IM0_ // Instruction Memory
      ├── _CORE0_
@@ -25,7 +25,7 @@
      │    ├── thread0_register_file
      │    └── thread1_register_file
      └── _DM_ // Data Memory */
-module sharpEdge_v3();
+module sharpEdge();
 	wire clk, cc;
 	//C:/Users/ofzbo/Documents/CeFeT_Mg/CEFET/se_v3
 

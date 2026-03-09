@@ -23,9 +23,7 @@ show -format dot -prefix $OUT
 "
 
 dot -Tpng ${OUT}.dot -o ${OUT}.png
-dot -Tpdf ${OUT}.dot -o ${OUT}.pdf
 
 echo ""
 echo "Generated files:"
 echo "  ${OUT}.png"
-echo "  ${OUT}.pdf"

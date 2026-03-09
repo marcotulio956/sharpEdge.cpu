@@ -1,19 +1,3 @@
-/*
-wave create -driver freeze -pattern clock -initialvalue 0 -period 10ps -dutycycle 50 -starttime 0ps -endtime 10000ps sim:/reservation_station/clk
-wave create -driver freeze -pattern clock -initialvalue 1 -period 10ps -dutycycle 50 -starttime 0ps -endtime 10ps sim:/reservation_station/rst
-wave create -driver freeze -pattern clock -initialvalue 1 -period 100ps -dutycycle 85 -starttime 0ps -endtime 10000ps sim:/reservation_station/write
-wave create -driver freeze -pattern random -initialvalue zzz -period 10ps -random_type Uniform -seed 5 -range 2 0 -starttime 0ps -endtime 1000ps sim:/reservation_station/opf
-wave create -driver freeze -pattern random -initialvalue {Not Logged} -period 10ps -random_type Uniform -seed 6 -range 4 0 -starttime 0ps -endtime 1000ps sim:/reservation_station/rob_dest
-wave create -driver freeze -pattern random -initialvalue zzz -period 10ps -random_type Uniform -seed 5 -starttime 0ps -endtime 1000ps sim:/reservation_station/qj_required
-wave create -driver freeze -pattern random -initialvalue zzz -period 10ps -random_type Uniform -seed 5 -starttime 0ps -endtime 1000ps sim:/reservation_station/qk_required
-wave create -driver freeze -pattern random -initialvalue zzz -period 10ps -random_type Uniform -seed 8 -range 4 0 -starttime 0ps -endtime 1000ps sim:/reservation_station/qj_rob_entry
-wave create -driver freeze -pattern random -initialvalue zzz -period 10ps -random_type Uniform -seed 9 -range 4 0 -starttime 0ps -endtime 1000ps sim:/reservation_station/qk_rob_entry
-wave create -driver freeze -pattern random -initialvalue zzz -period 10ps -random_type Uniform -seed 11 -range 31 0 -starttime 0ps -endtime 1000ps sim:/reservation_station/vj_in
-wave create -driver freeze -pattern random -initialvalue zzz -period 10ps -random_type Uniform -seed 12 -range 31 0 -starttime 0ps -endtime 1000ps sim:/reservation_station/vk_in
-
-force -freeze sim:/reservation_station/cdb_write 0 0
-force -freeze sim:/reservation_station/busy_fu 0000 0
-*/
 module ready_lines_sel(
     input [7:0] r,
     output logic [3:0] sel0, sel1, sel2, sel3
@@ -56,9 +40,13 @@ module reservation_station 	#(
 		input [ROB_ADRS_SIZE-1:0] qk_rob_entry,
 		input [V_SIZE-1:0] vj_in, vk_in,
 
-		input cdb_write,
-		input [ROB_ADRS_SIZE-1:0] cdb_rob_adrs,
-		input [V_SIZE-1:0] cdb_snooped_value,
+		input cdb0_write,
+		input [ROB_ADRS_SIZE-1:0] cdb0_rob_adrs,
+		input [V_SIZE-1:0] cdb0_snooped_value,
+
+		input cdb1_write,
+		input [ROB_ADRS_SIZE-1:0] cdb1_rob_adrs,
+		input [V_SIZE-1:0] cdb1_snooped_value,
 		
 		input [3:0] busy_fu,
 		//-- 
@@ -103,46 +91,67 @@ module reservation_station 	#(
 
 	ready_lines_sel rls(ready, readylines_sel0, readylines_sel1, readylines_sel2, readylines_sel3);
 
-	always @(clk) begin //RS is filled every half clock by erasing the posedge
-		if(rst == 1'b1)begin
-			busy <= 0; //important
-			qj_using <= 0; //important
-			qk_using <= 0; //important
-		end	else if(full==1'b0 && write==1'b1)begin//acomodating instruction
-			busy[write_sel] <= 1'b1;
-			opfunction[write_sel] <= opf;
-			rob_entry[write_sel] <= rob_dest;
-
-			qj[write_sel] <= qj_rob_entry;
-			if(cdb_write==1 && cdb_rob_adrs==qj_rob_entry)begin//forwarding vj value being writen by the cdb at the same clkedge as the instruction comes in 
-				qj_using[write_sel] <= 0;	
-				vj[write_sel] <= cdb_snooped_value;
-			end	else begin
-				vj[write_sel] <= vj_in;
-				qj_using[write_sel] <= qj_required;	
-			end
-
-			qk[write_sel] <= qk_rob_entry;
-			if(cdb_write==1 && cdb_rob_adrs==qk_rob_entry)begin//fowarding vk
-				qk_using[write_sel] <= 0;	
-				vk[write_sel] <= cdb_snooped_value;
-			end	else begin
-				vk[write_sel] <= vk_in;
-				qk_using[write_sel] <= qk_required;
-			end
-		end
-	end 
+	// Combined insertion, reset, and CDB snooping on posedge
 	always @(posedge clk) begin
-		if(rst==0) begin
-			for(i=0; i<RS_LINES; i=i+1)begin 
-				//CDB suppling Values.
-				if(qj_using[i]==1'b1 && qj[i]==cdb_rob_adrs && cdb_write==1'b1)begin 
-					vj[i] <= cdb_snooped_value;
-					qj_using[i] <= 1'b0;
+		if(rst==1'b1) begin
+			busy <= 0;
+			qj_using <= 0;
+			qk_using <= 0;
+		end else begin
+			// Handle new instruction insertion
+			if(full==1'b0 && write==1'b1) begin
+				busy[write_sel] <= 1'b1;
+				opfunction[write_sel] <= opf;
+				rob_entry[write_sel] <= rob_dest;
+
+				qj[write_sel] <= qj_rob_entry;
+				// Check both CDB0 and CDB1 for forwarding vj
+				if(cdb0_write==1 && cdb0_rob_adrs==qj_rob_entry)begin
+					qj_using[write_sel] <= 0;	
+					vj[write_sel] <= cdb0_snooped_value;
+				end	else if(cdb1_write==1 && cdb1_rob_adrs==qj_rob_entry)begin
+					qj_using[write_sel] <= 0;	
+					vj[write_sel] <= cdb1_snooped_value;
+				end	else begin
+					vj[write_sel] <= vj_in;
+					qj_using[write_sel] <= qj_required;	
 				end
-				if(qk_using[i]==1'b1 && qk[i]==cdb_rob_adrs && cdb_write==1'b1)begin
-					vk[i] <= cdb_snooped_value;
-					qk_using[i] <= 1'b0;
+
+				qk[write_sel] <= qk_rob_entry;
+				// Check both CDB0 and CDB1 for forwarding vk
+				if(cdb0_write==1 && cdb0_rob_adrs==qk_rob_entry)begin
+					qk_using[write_sel] <= 0;	
+					vk[write_sel] <= cdb0_snooped_value;
+				end	else if(cdb1_write==1 && cdb1_rob_adrs==qk_rob_entry)begin
+					qk_using[write_sel] <= 0;	
+					vk[write_sel] <= cdb1_snooped_value;
+				end	else begin
+					vk[write_sel] <= vk_in;
+					qk_using[write_sel] <= qk_required;
+				end
+			end
+			
+			// CDB snooping for existing entries
+			for(i=0; i<RS_LINES; i=i+1)begin 
+				// Check both CDB0 and CDB1 for snooping values
+				// Priority: CDB0 first, then CDB1 (both can't have same ROB address)
+				if(qj_using[i]==1'b1) begin
+					if(qj[i]==cdb0_rob_adrs && cdb0_write==1'b1)begin 
+						vj[i] <= cdb0_snooped_value;
+						qj_using[i] <= 1'b0;
+					end else if(qj[i]==cdb1_rob_adrs && cdb1_write==1'b1)begin 
+						vj[i] <= cdb1_snooped_value;
+						qj_using[i] <= 1'b0;
+					end
+				end
+				if(qk_using[i]==1'b1) begin
+					if(qk[i]==cdb0_rob_adrs && cdb0_write==1'b1)begin
+						vk[i] <= cdb0_snooped_value;
+						qk_using[i] <= 1'b0;
+					end else if(qk[i]==cdb1_rob_adrs && cdb1_write==1'b1)begin
+						vk[i] <= cdb1_snooped_value;
+						qk_using[i] <= 1'b0;
+					end
 				end
 			end
 		end

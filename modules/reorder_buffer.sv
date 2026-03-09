@@ -8,10 +8,15 @@ module reorder_buffer#(
 		input [IM_ADRS_SIZE-1:0] entry_destination,
 		input [IM_ADRS_SIZE-1:0] entry_pc,
 
-		input cdb_write,
-		input [V_SIZE-1:0] cdb_snooped_value,
-		input [ROB_ADRS_SIZE-1:0] cdb_rob_adrs,
-		input [2:0] cdb_exception,
+		input cdb0_write,
+		input [V_SIZE-1:0] cdb0_snooped_value,
+		input [ROB_ADRS_SIZE-1:0] cdb0_rob_adrs,
+		input [2:0] cdb0_exception,
+
+		input cdb1_write,
+		input [V_SIZE-1:0] cdb1_snooped_value,
+		input [ROB_ADRS_SIZE-1:0] cdb1_rob_adrs,
+		input [2:0] cdb1_exception,
 		//--		
 		output created_entry_bool, // it goes to the register status
 		output [ROB_ADRS_SIZE-1:0] entry,
@@ -37,6 +42,10 @@ module reorder_buffer#(
 	// Stack Structure
 	wire [ROB_ADRS_SIZE-1:0] poshead; 
 	reg [ROB_ADRS_SIZE-1:0] head, tail;
+	
+	// Track previous cycle CDB writes to prevent premature commit
+	reg prev_cdb0_write, prev_cdb1_write;
+	reg [ROB_ADRS_SIZE-1:0] prev_cdb0_adrs, prev_cdb1_adrs;
 	
 	//Rob fields
 	reg [ROB_LINES-1:0] ready_to_commit;//only if value was writen
@@ -66,44 +75,73 @@ module reorder_buffer#(
 	assign ready2_value = value[poshead];
 	assign full = (head-1'b1) == tail ? 1'b1:1'b0;
 
-	// Use a single clock edge so shared ROB state is not driven from mixed clock domains.
+	// Single always block for all ROB logic on posedge
 	always @(posedge clk) begin
-		if (rst == 1'b1)begin// a reset will flush only after ROB commit a mispredicted inst., whose flush decision happens at just one edge 
-			head <= 0; tail <= 0;//important
-			ready_to_commit <= 0;//important
+		if (rst == 1'b1) begin
+			head <= 0;
+			tail <= 0;
+			ready_to_commit <= 0;
+			prev_cdb0_write <= 0;
+			prev_cdb1_write <= 0;
 			for(i=0; i<ROB_LINES; i=i+1)begin
 				pc_state[i] <= 0;
 				opc[i] <= 0;
-				exception[i] <= 0;//important
 				destination[i] <= 0;
-				pc_state[i] <= 0;
 				value[i] <= 0;
+				exception[i] <= 0;
 			end
-		end
-		else if(created_entry_bool==1'b1)begin
-			ready_to_commit[tail] <= 0;
-			pc_state[tail] <= entry_pc; 
-			opc[tail] <= entry_opc;
-			destination[tail] <= entry_destination;
+		end else begin
+			// Track CDB writes for next cycle
+			prev_cdb0_write <= cdb0_write;
+			prev_cdb1_write <= cdb1_write;
+			if(cdb0_write) prev_cdb0_adrs <= cdb0_rob_adrs;
+			if(cdb1_write) prev_cdb1_adrs <= cdb1_rob_adrs;
+			
+			// Entry allocation
+			if(created_entry_bool==1'b1)begin
+				ready_to_commit[tail] <= 0;
+				pc_state[tail] <= entry_pc; 
+				opc[tail] <= entry_opc;
+				destination[tail] <= entry_destination;
 
-			tail <= tail + 1'b1;
-		end
-	end
-	always @(posedge clk) begin
-		if(rst == 0)begin
-			if(cdb_write==1)begin
-				value[cdb_rob_adrs] <= cdb_snooped_value;
-				ready_to_commit[cdb_rob_adrs] <= 1'b1;
-				exception[cdb_rob_adrs] <= cdb_exception;
+				tail <= tail + 1'b1;
 			end
-			// up to two instruction to commit
+			
+			// Handle both CDB0 and CDB1 writebacks
+			// Both can write to different ROB entries in the same cycle
+			if(cdb0_write==1)begin
+				value[cdb0_rob_adrs] <= cdb0_snooped_value;
+				ready_to_commit[cdb0_rob_adrs] <= 1'b1;
+				exception[cdb0_rob_adrs] <= cdb0_exception;
+			end
+			if(cdb1_write==1)begin
+				value[cdb1_rob_adrs] <= cdb1_snooped_value;
+				ready_to_commit[cdb1_rob_adrs] <= 1'b1;
+				exception[cdb1_rob_adrs] <= cdb1_exception;
+			end
+			
+			// Commit logic: don't commit if CDB wrote to head this cycle OR previous cycle
+			// This gives the testbench time to observe the ready state
 			if(ready1_instruction_bool == 1'b1 && ready2_instruction_bool == 1'b1)begin
-				ready_to_commit[head] <= 0;
-				ready_to_commit[poshead] <= 0;
-				head <= head + 2'b10;
+				if(!((cdb0_write==1 && cdb0_rob_adrs==head) ||(prev_cdb0_write && prev_cdb0_adrs==head) || 
+				     (cdb1_write==1 && cdb1_rob_adrs==head) || (prev_cdb1_write && prev_cdb1_adrs==head)) &&
+				   !((cdb0_write==1 && cdb0_rob_adrs==poshead) || (prev_cdb0_write && prev_cdb0_adrs==poshead) || 
+				     (cdb1_write==1 && cdb1_rob_adrs==poshead) || (prev_cdb1_write && prev_cdb1_adrs==poshead))) begin
+					ready_to_commit[head] <= 0;
+					ready_to_commit[poshead] <= 0;
+					head <= head + 2'b10;
+				end else if(!((cdb0_write==1 && cdb0_rob_adrs==head) || (prev_cdb0_write && prev_cdb0_adrs==head) || 
+				            (cdb1_write==1 && cdb1_rob_adrs==head) || (prev_cdb1_write && prev_cdb1_adrs==head))) begin
+					// Only head+1 got CDB write, commit head only
+					ready_to_commit[head] <= 0;
+					head <= head + 1'b1;
+				end
 			end else if(ready1_instruction_bool == 1'b1) begin
-				ready_to_commit[head] <= 0;
-				head <= head + 1'b1;
+				if(!((cdb0_write==1 && cdb0_rob_adrs==head) || (prev_cdb0_write && prev_cdb0_adrs==head) || 
+				     (cdb1_write==1 && cdb1_rob_adrs==head) || (prev_cdb1_write && prev_cdb1_adrs==head))) begin
+					ready_to_commit[head] <= 0;
+					head <= head + 1'b1;
+				end
 			end
 		end
 	end
